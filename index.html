@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Solar System 3D</title>
+    <style> body { margin: 0; } </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+        const sunLight = new THREE.PointLight(0xffffff, 2, 1000);
+        scene.add(sunLight);
+
+        const sunGeometry = new THREE.SphereGeometry(1, 32, 32);
+        const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+        const sun = new THREE.Mesh(sunGeometry, sunMaterial);
+        scene.add(sun);
+
+        const planets = [
+            { name: 'Mercury', code: '199', color: 0xaaaaaa, radius: 0.1 },
+            { name: 'Venus', code: '299', color: 0xffcc00, radius: 0.2 },
+            { name: 'Earth', code: '399', color: 0x0000ff, radius: 0.2 },
+            { name: 'Mars', code: '499', color: 0xff0000, radius: 0.15 },
+            { name: 'Jupiter', code: '599', color: 0xffa500, radius: 0.5 },
+            { name: 'Saturn', code: '699', color: 0xffff00, radius: 0.4 },
+            { name: 'Uranus', code: '799', color: 0x00ffff, radius: 0.3 },
+            { name: 'Neptune', code: '899', color: 0x00008b, radius: 0.3 },
+            { name: 'Pluto', code: '999', color: 0xa0522d, radius: 0.05 }
+        ];
+
+        const distanceScale = 1 / 10; // Compress distances
+
+        function parsePosition(text) {
+            const soeIndex = text.indexOf('$$SOE');
+            if (soeIndex === -1) return { x: 0, y: 0, z: 0 };
+            const lines = text.slice(soeIndex).split('\n');
+            for (let line of lines) {
+                if (line.trim().startsWith('X =')) {
+                    const xMatch = line.match(/X\s*=\s*([-\d.E+-]+)/);
+                    const yMatch = line.match(/Y\s*=\s*([-\d.E+-]+)/);
+                    const zMatch = line.match(/Z\s*=\s*([-\d.E+-]+)/);
+                    if (xMatch && yMatch && zMatch) {
+                        return {
+                            x: parseFloat(xMatch[1]) * distanceScale,
+                            y: parseFloat(yMatch[1]) * distanceScale,
+                            z: parseFloat(zMatch[1]) * distanceScale
+                        };
+                    }
+                }
+            }
+            return { x: 0, y: 0, z: 0 };
+        }
+
+        async function getPosition(code) {
+            const url = `https://ssd.jpl.nasa.gov/api/horizons.api?format=text&COMMAND='${code}'&OBJ_DATA='YES'&MAKE_EPHEM='YES'&EPHEM_TYPE='VECTORS'&CENTER='@sun'&START_TIME='2025-09-24'&STOP_TIME='2025-09-25'&STEP_SIZE='1 d'&REF_SYSTEM='J2000'&OUT_UNITS='AU-D'&VEC_TABLE='2'&VEC_LABELS='YES'&CSV_FORMAT='NO'`;
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                return parsePosition(text);
+            } catch (error) {
+                console.error(error);
+                return { x: 0, y: 0, z: 0 };
+            }
+        }
+
+        async function loadPlanets() {
+            const promises = planets.map(async (planet) => {
+                const pos = await getPosition(planet.code);
+                const geometry = new THREE.SphereGeometry(planet.radius, 32, 32);
+                const material = new THREE.MeshStandardMaterial({ color: planet.color });
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(pos.x, pos.y, pos.z);
+                scene.add(mesh);
+            });
+            await Promise.all(promises);
+            animate();
+        }
+
+        camera.position.set(0, 5, 10);
+        camera.lookAt(0, 0, 0);
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        loadPlanets();
+    </script>
+</body>
+</html>
